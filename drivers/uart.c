@@ -12,7 +12,7 @@ static int psoc6_getc(struct rt_serial_device *device_serial);
 /**
  * This function initializes uart
  */
-#if 1
+
 #ifdef RT_USING_UART0
 /* UART0 device driver structure */
 #define UART0_SCB_IRQ__INTC_NUMBER 46u
@@ -28,6 +28,7 @@ struct rt_device uart0_device;
 
 /* UART0 device driver structure */
 struct uart_int_rx uart0_int_rx;
+
 struct uart_device uart0_config =
 {
 	"uart0",
@@ -45,15 +46,16 @@ struct uart_device uart0_config =
  *
  * @param serial serial device
  */
+
 static void uart_isr(struct rt_serial_device *device_serial)
 {
     struct uart_device *uart;
     volatile uint32_t status = 0;
+    //
     RT_ASSERT(device_serial != RT_NULL);
     uart = rt_list_entry(device_serial, struct uart_device, serial);
     status = Cy_SCB_UART_GetRxFifoStatus(uart->scb_device);
-    Cy_SCB_UART_ClearRxFifoStatus(uart->scb_device, CY_SCB_RX_INTR_NOT_EMPTY|CY_SCB_RX_INTR_UART_BREAK_DETECT|CY_SCB_UART_RX_TRIGGER);
-    status = Cy_SCB_UART_GetRxFifoStatus(uart->scb_device);
+
     /* Check for receive errors */
     if (status & (CY_SCB_UART_RECEIVE_ERR_FRAME | CY_SCB_UART_RECEIVE_ERR_PARITY))
     {
@@ -62,27 +64,22 @@ static void uart_isr(struct rt_serial_device *device_serial)
         /* Re-enable FIFO after error */
     	Cy_SCB_UART_ClearRxFifo(uart->scb_device);
     }
-    else
+    else if(Cy_SCB_UART_GetNumInRxFifo(uart->scb_device))
     {
     	rt_hw_serial_isr(device_serial, RT_SERIAL_EVENT_RX_IND);
     }
-    //Cy_SCB_UART_ClearRxFifoStatus(&uart0_config.serial, CY_SCB_RX_INTR_NOT_EMPTY|CY_SCB_RX_INTR_UART_BREAK_DETECT|CY_SCB_UART_RX_TRIGGER);
 }
-/* ISR for uart interrupt */
-void rt_hw_uart_isr(struct rt_serial_device *device_serial)
+/* UART0 Interrupt Hanlder */
+void uart0_isr_callback(void)
 {
 
     /* enter interrupt */
     rt_interrupt_enter();
-
     uart_isr(&uart0_config.serial);
-
     /* leave interrupt */
     rt_interrupt_leave();
+
 }
-
-
-
 
 static rt_err_t psoc6_configure(struct rt_serial_device *device_serial, struct serial_configure *cfg)
 {
@@ -134,6 +131,7 @@ static int psoc6_putc(struct rt_serial_device *device_serial, char c)
 {
 	struct uart_device *uart;
 	volatile uint32_t status = 0;
+	int sta = -1;
 	RT_ASSERT(device_serial != RT_NULL);
 	uart = rt_list_entry(device_serial, struct uart_device, serial);
 	status = Cy_SCB_UART_GetTxFifoStatus(uart->scb_device);
@@ -142,18 +140,20 @@ static int psoc6_putc(struct rt_serial_device *device_serial, char c)
      * to the carriage return character
      */
 
-//	if (status & CY_SCB_TX_INTR_OVERFLOW | CY_SCB_TX_INTR_UNDERFLOW)
-//	{
-//		Cy_SCB_UART_ClearTxFifoStatus(uart->scb_device, CY_SCB_TX_INTR_OVERFLOW | CY_SCB_TX_INTR_UNDERFLOW);
-//		/* Re-enable FIFO after error */
-//		Cy_SCB_UART_ClearTxFifo(uart->scb_device);
-//	}
-//	else
+	if (status & CY_SCB_TX_INTR_OVERFLOW)
+	{
+		Cy_SCB_UART_ClearTxFifoStatus(uart->scb_device, CY_SCB_TX_INTR_OVERFLOW);
+		/* Re-enable FIFO after error */
+		Cy_SCB_UART_ClearTxFifo(uart->scb_device);
+	}
+	else
 	{
 		while(0 == Cy_SCB_UART_Put(uart->scb_device, (c & 0x1FF)));
+		Cy_SCB_UART_ClearTxFifoStatus(uart->scb_device, CY_SCB_UART_TX_NOT_FULL| CY_SCB_TX_INTR_OVERFLOW | CY_SCB_TX_INTR_UNDERFLOW);
+		sta = 1;
 	}
-    Cy_SCB_UART_ClearTxFifoStatus(uart->scb_device, CY_SCB_UART_TX_NOT_FULL| CY_SCB_TX_INTR_OVERFLOW | CY_SCB_TX_INTR_UNDERFLOW);
-    return 1;
+
+	return sta;
 }
 
 static int psoc6_getc(struct rt_serial_device *device_serial)
@@ -164,9 +164,12 @@ static int psoc6_getc(struct rt_serial_device *device_serial)
 	uart = rt_list_entry(device_serial, struct uart_device, serial);
     ch = -1;
 	/* polling mode */
-    val = Cy_SCB_UART_GetNumInRxFifo(uart->scb_device);
-    if (0UL != val)
-		ch = Cy_SCB_UART_Get(uart->scb_device);
+
+	val = Cy_SCB_UART_GetNumInRxFifo(uart->scb_device);
+
+	if (0UL != val)
+			ch = Cy_SCB_UART_Get(uart->scb_device);
+	Cy_SCB_UART_ClearRxFifo(uart->scb_device);
 	Cy_SCB_UART_ClearRxFifoStatus(uart->scb_device, CY_SCB_RX_INTR_NOT_EMPTY|CY_SCB_RX_INTR_UART_BREAK_DETECT|CY_SCB_UART_RX_TRIGGER);
     return ch;
 }
@@ -179,18 +182,7 @@ static const struct rt_uart_ops psoc6_uart_ops =
     .getc = psoc6_getc,
     .dma_transmit = RT_NULL
 };
-#endif //0
-/* UART0 Interrupt Hanlder */
-void uart0_isr_callback(void)
-{
-    /* enter interrupt */
-    rt_interrupt_enter();
-    rt_hw_uart_isr(&uart0_device);
-    /* leave interrupt */
-    rt_interrupt_leave();
-}
 #endif
-
 
 void rt_hw_uart_init(void)
 {
@@ -203,10 +195,10 @@ void rt_hw_uart_init(void)
     /* register UART0 device */
 	rt_hw_serial_register(&uart0_config.serial, \
     					uart0_config.name, \
-						RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_INT_TX, \
+						RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX,\
 						NULL);
+						//RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_INT_TX,
                           //RT_DEVICE_FLAG_RDWR | RT_DEVICE_FLAG_INT_RX | RT_DEVICE_FLAG_STREAM,
-
 
 }
 

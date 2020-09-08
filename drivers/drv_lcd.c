@@ -24,7 +24,7 @@
 
 #include <board.h>
 #include "drv_lcd.h"
-
+#include "lcd_qspi.h"
 #ifdef BSP_USING_LCD
 #include <lcd_port.h>
 #include <string.h>
@@ -65,14 +65,7 @@ static rt_err_t drv_lcd_control(struct rt_device *device, int cmd, void *args)
     {
 		case RTGRAPHIC_CTRL_RECT_UPDATE:
 		{
-		   /* back_buf is being used */
-	//		memcpy(_lcd.front_buf, _lcd.lcd_info.framebuffer, LCD_BUF_SIZE);
-			/* Configure the color frame buffer start address */
-	//           LTDC_LAYER(&LtdcHandle, 0)->CFBAR &= ~(LTDC_LxCFBAR_CFBADD);
-	//           LTDC_LAYER(&LtdcHandle, 0)->CFBAR = (uint32_t)(_lcd.front_buf);
-			lcd_drawpic(_lcd.lcd_info.framebuffer);
-//			rt_sem_take(&_lcd.lcd_lock, RT_TICK_PER_SECOND / 20);
-	 //       HAL_LTDC_Relaod(&LtdcHandle, LTDC_SRCR_VBR);
+			SMIF_lcd_drawpic((void *)_lcd.lcd_info.framebuffer);
 		}
 		break;
 
@@ -97,25 +90,6 @@ static rt_err_t drv_lcd_control(struct rt_device *device, int cmd, void *args)
     return RT_EOK;
 }
 
-//void HAL_LTDC_ReloadEventCallback(LTDC_HandleTypeDef *hltdc)
-//{
-//    /* emable line interupt */
-//    __HAL_LTDC_ENABLE_IT(&LtdcHandle, LTDC_IER_LIE);
-//}
-
-//void HAL_LTDC_LineEventCallback(LTDC_HandleTypeDef *hltdc)
-//{
-//    rt_sem_release(&_lcd.lcd_lock);
-//}
-
-void LTDC_IRQHandler(void)
-{
-//    rt_enter_critical();
-
-//    HAL_LTDC_IRQHandler(&LtdcHandle);
-
-//    rt_exit_critical();
-}
 #if defined(LCD_BACKLIGHT_USING_PWM)
 void turn_on_lcd_backlight(void)
 {
@@ -202,7 +176,7 @@ int drv_lcd_hw_init(void)
     rt_device_register(device, "lcd", RT_DEVICE_FLAG_RDWR);
 
     /* init stm32 LTDC */
-    if (LCD_init(&_lcd) != RT_EOK)
+    if (SMIF_lcd_init() != RT_EOK)
     {
         result = -RT_ERROR;
         goto __exit;

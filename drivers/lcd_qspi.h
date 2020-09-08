@@ -10,7 +10,7 @@
 
 #ifndef __LCD_QSPI_H__
 #define __LCD_QSPI_H__
-extern void LCD_init(void);
-extern int lcd_drawpic(void * image);
+extern int SMIF_lcd_init(void);
+extern int SMIF_lcd_drawpic(void * image);
 
 #endif /* __LCD_QSPI_H__ */

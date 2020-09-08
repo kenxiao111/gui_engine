@@ -101,7 +101,7 @@ void DMA_Configure(uint8_t * pDMASrc);
 /***************************************************************************
 * Function Name: main.c
 ***************************************************************************/
-int lcd_drawpic(void * image)
+int SMIF_lcd_drawpic(void * image)
 {
     for(int j=0; j<(LCD_WIDTH/ROWNUMONETIME); j++)
     {
@@ -115,7 +115,7 @@ int lcd_drawpic(void * image)
 
 		WriteDisplayData(NULL, ROWNUMONETIME*1080);		//transmit display data
     }
-
+    return 0;
 }
 
 void DMA_Configure(uint8_t * pDMASrc)
@@ -290,7 +290,7 @@ void Isr_SMIF(void)
 }
 
 
-void LCD_init(void)
+int SMIF_lcd_init(void)
 {
 	init_cycfg_all();
 	__enable_irq();
@@ -305,5 +305,6 @@ void LCD_init(void)
 	qspiBuf[3] = 0x67;
 	Cy_SMIF_SetTxFifoTriggerLevel(KIT_QSPI_HW, 3);
 	WriteCmdParameter(0x2A,qspiBuf,4);					//set column position
+	return 0;
 }
 #endif
